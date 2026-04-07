@@ -1,0 +1,67 @@
+name: 'FFXI Fetch'
+description: 'Fetch FFXI DAT files from B2 storage with manifest-based versioning'
+inputs:
+  files:
+    description: 'Inline list of file paths (one per line). Supports glob patterns (e.g. ROM/306/*)'
+    required: false
+  files-from:
+    description: 'Path to a file containing file paths (one per line, # comments). Supports glob patterns'
+    required: false
+  output-dir:
+    description: 'Directory to write downloaded files to'
+    required: false
+    default: 'dat'
+  version:
+    description: 'FFXI version to fetch (default: latest)'
+    required: false
+    default: 'latest'
+  cache:
+    description: 'Cache downloaded files across runs'
+    required: false
+    default: 'true'
+outputs:
+  version:
+    description: 'The FFXI version that was fetched'
+    value: ${{ steps.resolve.outputs.version }}
+  files-count:
+    description: 'Number of files resolved'
+    value: ${{ steps.resolve.outputs.count }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: |
+        if ! command -v zstd &> /dev/null; then
+          sudo apt-get update -qq && sudo apt-get install -y -qq zstd > /dev/null
+        fi
+        pip3 install -q --break-system-packages boto3 2>/dev/null || pip3 install -q boto3
+
+    - name: Resolve manifest
+      id: resolve
+      shell: bash
+      env:
+        BUCKET_KEY_ID: ${{ env.BUCKET_KEY_ID }}
+        BUCKET_APP_KEY: ${{ env.BUCKET_APP_KEY }}
+        INPUT_FILES: ${{ inputs.files }}
+        INPUT_FILES_FROM: ${{ inputs.files-from }}
+        INPUT_OUTPUT_DIR: ${{ inputs.output-dir }}
+        INPUT_VERSION: ${{ inputs.version }}
+      run: python3 "${{ github.action_path }}/resolve.py"
+
+    - name: Restore cache
+      if: inputs.cache == 'true'
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.output-dir }}
+        key: ffxi-${{ steps.resolve.outputs.version }}-${{ steps.resolve.outputs.filehash }}
+
+    - name: Download files
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        BUCKET_KEY_ID: ${{ env.BUCKET_KEY_ID }}
+        BUCKET_APP_KEY: ${{ env.BUCKET_APP_KEY }}
+        INPUT_OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: python3 "${{ github.action_path }}/download.py"

@@ -1,0 +1,74 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  inline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: fetch
+        with:
+          files: |
+            ROM/0/0.DAT
+            ROM/0/1.DAT
+          output-dir: out
+        env:
+          BUCKET_KEY_ID: ${{ secrets.BUCKET_KEY_ID }}
+          BUCKET_APP_KEY: ${{ secrets.BUCKET_APP_KEY }}
+      - run: |
+          test -f out/ROM/0/0.DAT
+          test -f out/ROM/0/1.DAT
+          test "${{ steps.fetch.outputs.files-count }}" = "2"
+
+  glob:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: fetch
+        with:
+          files: ROM/0/[0-2].DAT
+          output-dir: out
+        env:
+          BUCKET_KEY_ID: ${{ secrets.BUCKET_KEY_ID }}
+          BUCKET_APP_KEY: ${{ secrets.BUCKET_APP_KEY }}
+      - run: |
+          test -f out/ROM/0/0.DAT
+          test -f out/ROM/0/1.DAT
+          test -f out/ROM/0/2.DAT
+          test "${{ steps.fetch.outputs.files-count }}" = "3"
+
+  files-from:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          files-from: .ffxi-test-files
+          output-dir: out
+        env:
+          BUCKET_KEY_ID: ${{ secrets.BUCKET_KEY_ID }}
+          BUCKET_APP_KEY: ${{ secrets.BUCKET_APP_KEY }}
+      - run: |
+          test -f out/ROM/0/0.DAT
+          test -f out/ROM/0/1.DAT
+
+  no-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          files: ROM/0/0.DAT
+          output-dir: out
+          cache: 'false'
+        env:
+          BUCKET_KEY_ID: ${{ secrets.BUCKET_KEY_ID }}
+          BUCKET_APP_KEY: ${{ secrets.BUCKET_APP_KEY }}
+      - run: test -f out/ROM/0/0.DAT
